@@ -37,12 +37,29 @@ def main():
         help="Include full detailed output for the latest drive",
     )
 
+    # morning
+    morning_parser = subparsers.add_parser(
+        "morning", help="Morning routine Tesla summary"
+    )
+    morning_parser.add_argument("--lat", type=float, required=True, help="Latitude")
+    morning_parser.add_argument("--lon", type=float, required=True, help="Longitude")
+    morning_parser.add_argument("--temp", type=float, default=None, help="Current temp in °F (from Siri, skips weather API)")
+
     # pollen
     pollen_parser = subparsers.add_parser(
         "pollen", help="Current pollen levels from Google Pollen API"
     )
     pollen_parser.add_argument("--lat", type=float, required=True, help="Latitude")
     pollen_parser.add_argument("--lon", type=float, required=True, help="Longitude")
+
+    # chargepoint
+    cp_parser = subparsers.add_parser(
+        "chargepoint", help="Join ChargePoint waitlist"
+    )
+    cp_parser.add_argument(
+        "-t", "--until-time", type=int, default=23,
+        help="Stay on waitlist until this hour [0-23]. Default 23."
+    )
 
     args = parser.parse_args()
 
@@ -60,10 +77,20 @@ def main():
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
+    if args.command == "morning":
+        from tesla.morning import run
+
+        return run(args.lat, args.lon, temp_f=args.temp)
+
     if args.command == "pollen":
         from pollen.scrape import run
 
         return run(args.lat, args.lon)
+
+    if args.command == "chargepoint":
+        from chargepoint.waitlist import run
+
+        return run(until_time=args.until_time)
 
     return 0
 
