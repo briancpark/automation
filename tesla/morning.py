@@ -9,6 +9,22 @@ import urllib.error
 COMMUTE_MILES = 8.4
 COMMUTE_KM = COMMUTE_MILES / 0.621371
 
+# ChargePoint workplace charger specs
+CHARGER_KW = 6.6
+SESSION_LIMIT_HRS = 4
+CHARGING_EFFICIENCY = 0.90  # L2 charging ~90% efficient
+MAX_CHARGE_KWH = CHARGER_KW * SESSION_LIMIT_HRS * CHARGING_EFFICIENCY  # ~23.8 kWh
+
+# Car specs (Model 3 SR+)
+# Derived from TeslaMate: efficiency 0.137 kWh/km, ~429 km ideal range at 100%
+BATTERY_CAPACITY_KWH = 59.0
+MAX_CHARGE_GAIN_PCT = (MAX_CHARGE_KWH / BATTERY_CAPACITY_KWH) * 100  # ~40%
+
+# Join waitlist if arrival battery is at or below this threshold.
+# At 60%, a 4-hour session brings you to ~100% — full utilization of the spot.
+# Above 60%, you'd hit 100% early and block the charger for others.
+WAITLIST_THRESHOLD_PCT = 60
+
 # TeslaMate DB queries
 SQL_CURRENT_STATE = (
     "SELECT battery_level, ideal_battery_range_km, rated_battery_range_km, "
@@ -203,22 +219,77 @@ def build_summary(lat, lon, temp_f=None):
             f"arriving at {arrival_battery}%."
         )
 
-    # Charging recommendation
-    if arrival_battery is not None and arrival_battery < 20:
-        parts.append("You should charge before heading out.")
+    # Charging decision
+    should_join = False
+    charge_time_needed_hrs = None
+
+    if arrival_battery is not None:
+        battery_after_round_trip = arrival_battery - round(batt_drop)
+
+        if arrival_battery <= WAITLIST_THRESHOLD_PCT:
+            should_join = True
+            # How long to charge to ~100%?
+            pct_to_fill = 100 - arrival_battery
+            charge_time_needed_hrs = min(
+                SESSION_LIMIT_HRS,
+                (pct_to_fill / 100 * BATTERY_CAPACITY_KWH)
+                / (CHARGER_KW * CHARGING_EFFICIENCY),
+            )
+            charge_gain = min(pct_to_fill, MAX_CHARGE_GAIN_PCT)
+            leave_battery = arrival_battery + round(charge_gain)
+
+            parts.append(
+                f"Joining the ChargePoint waitlist. "
+                f"A {charge_time_needed_hrs:.1f} hour session at 6.6 kW "
+                f"would bring you from {arrival_battery}% to about {leave_battery}%."
+            )
+        elif battery_after_round_trip < 30:
+            should_join = True
+            pct_to_fill = 100 - arrival_battery
+            charge_time_needed_hrs = min(
+                SESSION_LIMIT_HRS,
+                (pct_to_fill / 100 * BATTERY_CAPACITY_KWH)
+                / (CHARGER_KW * CHARGING_EFFICIENCY),
+            )
+            charge_gain = min(pct_to_fill, MAX_CHARGE_GAIN_PCT)
+            leave_battery = arrival_battery + round(charge_gain)
+
+            parts.append(
+                f"You'd be at {battery_after_round_trip}% after the round trip. "
+                f"Joining the ChargePoint waitlist. "
+                f"A session would bring you to about {leave_battery}%."
+            )
+        else:
+            parts.append(
+                f"No need to charge today. "
+                f"You'll have about {battery_after_round_trip}% after the round trip."
+            )
     elif battery_pct < 30:
-        parts.append("Battery is getting low, consider charging today.")
-    elif arrival_battery is not None and arrival_battery < 40:
-        parts.append("You'll be fine today, but consider plugging in tonight.")
+        should_join = True
+        parts.append("Battery is low. Joining the ChargePoint waitlist.")
     else:
         parts.append("No need to charge today.")
 
-    return " ".join(parts)
+    return " ".join(parts), should_join
+
+
+def _auto_join_waitlist():
+    """Join ChargePoint waitlist if credentials are configured."""
+    try:
+        from chargepoint.waitlist import run as cp_run
+
+        return cp_run()
+    except Exception as exc:
+        print(f"ChargePoint waitlist error: {exc}", file=sys.stderr)
+        return 1
 
 
 def run(lat, lon, temp_f=None):
     try:
-        print(build_summary(lat, lon, temp_f=temp_f))
+        summary, should_join = build_summary(lat, lon, temp_f=temp_f)
+        print(summary)
+        if should_join:
+            _auto_join_waitlist()
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
