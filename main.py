@@ -37,6 +37,11 @@ def main():
         help="Include full detailed output for the latest drive",
     )
 
+    # tesla-weekly
+    subparsers.add_parser(
+        "tesla-weekly", help="Weekly driving stats recap"
+    )
+
     # morning
     morning_parser = subparsers.add_parser(
         "morning", help="Morning routine Tesla summary"
@@ -76,6 +81,11 @@ def main():
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
+
+    if args.command == "tesla-weekly":
+        from tesla.weekly import run
+
+        return run()
 
     if args.command == "morning":
         from tesla.morning import run
