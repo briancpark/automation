@@ -66,6 +66,11 @@ def main():
         help="Stay on waitlist until this hour [0-23]. Default 23."
     )
 
+    # crunchyroll-mal
+    subparsers.add_parser(
+        "crunchyroll-mal", help="Sync Crunchyroll watch history to MyAnimeList"
+    )
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -101,6 +106,11 @@ def main():
         from chargepoint.waitlist import run
 
         return run(until_time=args.until_time)
+
+    if args.command == "crunchyroll-mal":
+        from crunchyroll_mal.sync import run
+
+        return run()
 
     return 0
 
