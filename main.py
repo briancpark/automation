@@ -42,9 +42,9 @@ def main():
         "tesla-weekly", help="Weekly driving stats recap"
     )
 
-    # morning
+    # tesla-morning
     morning_parser = subparsers.add_parser(
-        "morning", help="Morning routine Tesla summary"
+        "tesla-morning", help="Morning routine Tesla summary"
     )
     morning_parser.add_argument("--lat", type=float, required=True, help="Latitude")
     morning_parser.add_argument("--lon", type=float, required=True, help="Longitude")
@@ -92,7 +92,7 @@ def main():
 
         return run()
 
-    if args.command == "morning":
+    if args.command == "tesla-morning":
         from tesla.morning import run
 
         return run(args.lat, args.lon, temp_f=args.temp)
