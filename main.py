@@ -97,9 +97,6 @@ def main():
     tv_sub.add_parser("status", help="Get current TV status")
     tv_sub.add_parser("apps", help="List installed apps")
 
-    # tv-server
-    server_parser = subparsers.add_parser("tv-server", help="Start LG TV HTTP relay server")
-    server_parser.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
 
     args = parser.parse_args()
 
@@ -169,13 +166,6 @@ def main():
                 print(f"{a['id']:50s} {a['title']}")
         else:
             tv_parser.print_help()
-        return 0
-
-    if args.command == "tv-server":
-        import os
-        os.environ["TV_SERVER_PORT"] = str(args.port)
-        import uvicorn
-        uvicorn.run("lg_tv.server:app", host="0.0.0.0", port=args.port, reload=False)
         return 0
 
     return 0
