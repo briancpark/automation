@@ -66,6 +66,19 @@ def main():
         help="Stay on waitlist until this hour [0-23]. Default 23."
     )
 
+    # charge-cost
+    cc_parser = subparsers.add_parser(
+        "charge-cost", help="EV savings report vs equivalent gas cars"
+    )
+    cc_parser.add_argument(
+        "--weeks", type=int, default=30,
+        help="Number of weeks to look back (default: 8)"
+    )
+    cc_parser.add_argument(
+        "--region", type=str, default="CA",
+        help="Gas price region: CA (California), US (national), WC (West Coast). Default: CA"
+    )
+
     # crunchyroll-mal
     subparsers.add_parser(
         "crunchyroll-mal", help="Sync Crunchyroll watch history to MyAnimeList"
@@ -106,6 +119,11 @@ def main():
         from chargepoint.waitlist import run
 
         return run(until_time=args.until_time)
+
+    if args.command == "charge-cost":
+        from tesla.charge_cost import run
+
+        return run(weeks_back=args.weeks, region_code=args.region)
 
     if args.command == "crunchyroll-mal":
         from crunchyroll_mal.sync import run
