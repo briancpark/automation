@@ -84,6 +84,23 @@ def main():
         "crunchyroll-mal", help="Sync Crunchyroll watch history to MyAnimeList"
     )
 
+    # lg-tv
+    tv_parser = subparsers.add_parser("lg-tv", help="Control LG TV")
+    tv_sub = tv_parser.add_subparsers(dest="tv_command")
+    tv_launch = tv_sub.add_parser("launch", help="Launch an app")
+    tv_launch.add_argument("app", help="App name: netflix, youtube, prime, disney, jellyfin, appletv, twitch, switch (HDMI1), hdmi2, live")
+    tv_vol = tv_sub.add_parser("volume", help="Set volume (0-100)")
+    tv_vol.add_argument("level", type=int)
+    tv_sub.add_parser("mute", help="Mute TV")
+    tv_sub.add_parser("unmute", help="Unmute TV")
+    tv_sub.add_parser("off", help="Power off TV")
+    tv_sub.add_parser("status", help="Get current TV status")
+    tv_sub.add_parser("apps", help="List installed apps")
+
+    # tv-server
+    server_parser = subparsers.add_parser("tv-server", help="Start LG TV HTTP relay server")
+    server_parser.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -129,6 +146,37 @@ def main():
         from crunchyroll_mal.sync import run
 
         return run()
+
+    if args.command == "lg-tv":
+        import json
+        from lg_tv import client as tv
+
+        if args.tv_command == "launch":
+            print(json.dumps(tv.launch_app(args.app), indent=2))
+        elif args.tv_command == "volume":
+            print(json.dumps(tv.set_volume(args.level), indent=2))
+        elif args.tv_command == "mute":
+            print(json.dumps(tv.mute(True), indent=2))
+        elif args.tv_command == "unmute":
+            print(json.dumps(tv.mute(False), indent=2))
+        elif args.tv_command == "off":
+            print(json.dumps(tv.power_off(), indent=2))
+        elif args.tv_command == "status":
+            print(json.dumps(tv.get_status(), indent=2))
+        elif args.tv_command == "apps":
+            result = tv.list_apps()
+            for a in result.get("apps", []):
+                print(f"{a['id']:50s} {a['title']}")
+        else:
+            tv_parser.print_help()
+        return 0
+
+    if args.command == "tv-server":
+        import os
+        os.environ["TV_SERVER_PORT"] = str(args.port)
+        import uvicorn
+        uvicorn.run("lg_tv.server:app", host="0.0.0.0", port=args.port, reload=False)
+        return 0
 
     return 0
 
