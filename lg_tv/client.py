@@ -6,12 +6,16 @@ Client key is stored in .tv_client_key for subsequent calls.
 
 import asyncio
 import os
+import time
 from pathlib import Path
 
 from aiowebostv import WebOsClient
+import wakeonlan
 
 TV_IP = os.environ.get("LG_TV_IP", "192.168.1.97")
+TV_MAC = os.environ.get("LG_TV_MAC", "b4:b2:91:9c:78:01")
 KEY_PATH = Path(__file__).resolve().parent / ".tv_client_key"
+WAKE_TIMEOUT = 30  # seconds to wait for TV to boot
 
 # App IDs on webOS
 APP_IDS = {
@@ -44,14 +48,43 @@ def _save_key(key: str):
     KEY_PATH.write_text(key)
 
 
-async def _run(coro):
-    """Connect, run a coroutine, disconnect."""
+async def _wake_and_connect() -> WebOsClient:
+    """Send WoL, wait for TV to come online, return connected client."""
     client_key = _load_key()
     tv = WebOsClient(TV_IP, client_key=client_key)
-    await tv.connect()
-    # Save updated client key after (re)pairing
-    if tv.client_key and tv.client_key != client_key:
-        _save_key(tv.client_key)
+
+    # Try connecting first — if TV is already on, skip WoL
+    try:
+        await tv.connect()
+        if tv.client_key and tv.client_key != client_key:
+            _save_key(tv.client_key)
+        return tv
+    except Exception:
+        pass
+
+    # TV is off — send WoL and wait
+    print("TV is off, sending Wake-on-LAN...")
+    wakeonlan.send_magic_packet(TV_MAC)
+
+    deadline = time.time() + WAKE_TIMEOUT
+    while time.time() < deadline:
+        await asyncio.sleep(2)
+        try:
+            tv = WebOsClient(TV_IP, client_key=client_key)
+            await tv.connect()
+            if tv.client_key and tv.client_key != client_key:
+                _save_key(tv.client_key)
+            print("TV is on.")
+            return tv
+        except Exception:
+            continue
+
+    raise TimeoutError(f"TV did not respond within {WAKE_TIMEOUT}s after WoL")
+
+
+async def _run(coro):
+    """Wake TV if needed, connect, run coroutine, disconnect."""
+    tv = await _wake_and_connect()
     try:
         result = await coro(tv)
     finally:
